@@ -31,7 +31,8 @@ model Call {
   status            String
   createdAt         DateTime     @default(now())
   transcripts       Transcript[]
-  transcript       String?   // 👈 add this
+  transcript       String?
+   googleLanguage     String?
   transcriptStatus String @default("pending")
   costItems         CostItem[]
 }

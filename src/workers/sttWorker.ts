@@ -131,7 +131,7 @@ export async function startSttAndSaveTranscript(
     let duration: number | null = null;
 
     if (sttProvider === "google") {
-      const lang = process.env.GOOGLE_STT_LANG || "en-US"; // 👈 env-based
+      const lang = settings?.googleLanguage || "en-US";
       console.log(`[GoogleSTT] using lang=${lang}`);
       const result = await runGoogleSTT(audioUrl, lang);
       text = result.text;

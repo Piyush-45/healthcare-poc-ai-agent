@@ -1,117 +1,206 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+"use client";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const AZURE_VOICES = [
   { label: "English (US) - Jenny (Female)", value: "en-US-JennyNeural" },
   { label: "English (US) - Guy (Male)", value: "en-US-GuyNeural" },
   { label: "Hindi (IN) - Swara (Female)", value: "hi-IN-SwaraNeural" },
   { label: "Hindi (IN) - Madhur (Male)", value: "hi-IN-MadhurNeural" },
-  // { label: "Marathi (IN) - Aarav (Male)", value: "mr-IN-AaravNeural" },
-  // { label: "Marathi (IN) - Ananya (Female)", value: "mr-IN-AnanyaNeural" },
+];
+
+const GOOGLE_LANGS = [
+  { label: "English (US)", value: "en-US" },
+  { label: "English (UK)", value: "en-GB" },
+  { label: "Hindi (India)", value: "hi-IN" },
+  { label: "Marathi (India)", value: "mr-IN" },
+  { label: "Bengali (India)", value: "bn-IN" },
 ];
 
 export default function SettingsPage() {
-  const [voiceGender, setVoiceGender] = useState('male');
-  const [sttProvider, setSttProvider] = useState('deepgram');
-  const [ttsProvider, setTtsProvider] = useState('elevenlabs');
-  const [elevenMale, setElevenMale] = useState('');
-  const [elevenFemale, setElevenFemale] = useState('');
-  const [azureVoiceName, setAzureVoiceName] = useState('');
+  const [voiceGender, setVoiceGender] = useState("male");
+  const [sttProvider, setSttProvider] = useState("deepgram");
+  const [ttsProvider, setTtsProvider] = useState("elevenlabs");
+  const [elevenMale, setElevenMale] = useState("");
+  const [elevenFemale, setElevenFemale] = useState("");
+  const [azureVoiceName, setAzureVoiceName] = useState("");
+  const [googleLanguage, setGoogleLanguage] = useState("en-US");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { fetchSettings(); }, []);
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
   async function fetchSettings() {
-    const r = await fetch('/api/settings');
+    const r = await fetch("/api/settings");
     const j = await r.json();
-    setVoiceGender(j.voiceGender || 'male');
-    setSttProvider(j.sttProvider || 'deepgram');
-    setTtsProvider(j.ttsProvider || 'elevenlabs');
-    setElevenMale(j.eleven_male_voice || '');
-    setElevenFemale(j.eleven_female_voice || '');
-    setAzureVoiceName(j.azureVoiceName || '');
+    setVoiceGender(j.voiceGender || "male");
+    setSttProvider(j.sttProvider || "deepgram");
+    setTtsProvider(j.ttsProvider || "elevenlabs");
+    setElevenMale(j.eleven_male_voice || "");
+    setElevenFemale(j.eleven_female_voice || "");
+    setAzureVoiceName(j.azureVoiceName || "");
+    setGoogleLanguage(j.googleLanguage || "en-US");
   }
 
   async function save() {
     setSaving(true);
-    await fetch('/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
-      voiceGender, sttProvider, ttsProvider,
-      eleven_male_voice: elevenMale,
-      eleven_female_voice: elevenFemale,
-      azureVoiceName,
-    })});
+    await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voiceGender,
+        sttProvider,
+        ttsProvider,
+        eleven_male_voice: elevenMale,
+        eleven_female_voice: elevenFemale,
+        azureVoiceName,
+        googleLanguage,
+      }),
+    });
     setSaving(false);
-    alert('Saved');
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <h2 className="text-xl font-semibold">Settings</h2>
+    <div className="p-6 space-y-6 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-bold">Settings</h2>
 
-      <div className="space-y-4">
-        {/* Voice gender toggle */}
-        <div>
-          <label className="block text-sm font-medium">Voice gender</label>
-          <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value)} className="mt-1 block w-48">
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-        </div>
-
-        {/* STT provider */}
-        <div>
-          <label className="block text-sm font-medium">STT provider</label>
-          <select value={sttProvider} onChange={(e) => setSttProvider(e.target.value)} className="mt-1 block w-48">
-            <option value="deepgram">Deepgram</option>
-            <option value="whisper">OpenAI Whisper</option>
-            <option value="azure">Azure</option>
-            <option value="google">Google</option>
-          </select>
-        </div>
-
-        {/* TTS provider */}
-        <div>
-          <label className="block text-sm font-medium">TTS provider</label>
-          <select value={ttsProvider} onChange={(e) => setTtsProvider(e.target.value)} className="mt-1 block w-48">
-            <option value="plivo">Plivo (built-in)</option>
-            <option value="elevenlabs">ElevenLabs</option>
-            <option value="azure">Azure TTS</option>
-            <option value="google">Google TTS</option>
-          </select>
-        </div>
-
-        {/* ElevenLabs input */}
-        {ttsProvider === 'elevenlabs' && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Voice Configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div>
-            <p className="text-sm text-slate-600">ElevenLabs voice IDs (optional):</p>
-            <input placeholder="male voice id" value={elevenMale} onChange={e => setElevenMale(e.target.value)} className="mt-1 block w-full" />
-            <input placeholder="female voice id" value={elevenFemale} onChange={e => setElevenFemale(e.target.value)} className="mt-1 block w-full" />
+            <Label>Voice gender</Label>
+            <Select value={voiceGender} onValueChange={setVoiceGender}>
+              <SelectTrigger className="w-48 mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        )}
+        </CardContent>
+      </Card>
 
-        {/* Azure dropdown */}
-        {ttsProvider === 'azure' && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Speech-to-Text (STT)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium">Azure Voice</label>
-            <select
-              value={azureVoiceName}
-              onChange={(e) => setAzureVoiceName(e.target.value)}
-              className="mt-1 block w-full"
-            >
-              <option value="">-- Select Voice --</option>
-              {AZURE_VOICES.map((v) => (
-                <option key={v.value} value={v.value}>{v.label}</option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">
-              These are curated Azure voices (English, Hindi, Marathi). More can be added later.
-            </p>
+            <Label>Provider</Label>
+            <Select value={sttProvider} onValueChange={setSttProvider}>
+              <SelectTrigger className="w-60 mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="deepgram">Deepgram</SelectItem>
+                <SelectItem value="whisper">OpenAI Whisper</SelectItem>
+                <SelectItem value="azure">Azure</SelectItem>
+                <SelectItem value="google">Google</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        <div>
-          <Button onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save settings'}</Button>
-        </div>
+          {sttProvider === "google" && (
+            <div>
+              <Label>Google STT Language</Label>
+              <Select value={googleLanguage} onValueChange={setGoogleLanguage}>
+                <SelectTrigger className="w-60 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GOOGLE_LANGS.map((lang) => (
+                    <SelectItem key={lang.value} value={lang.value}>
+                      {lang.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Text-to-Speech (TTS)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Provider</Label>
+            <Select value={ttsProvider} onValueChange={setTtsProvider}>
+              <SelectTrigger className="w-60 mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="plivo">Plivo (built-in)</SelectItem>
+                <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                <SelectItem value="azure">Azure TTS</SelectItem>
+                <SelectItem value="google">Google TTS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {ttsProvider === "elevenlabs" && (
+            <div className="space-y-2">
+              <Label>ElevenLabs Voice IDs (optional)</Label>
+              <input
+                placeholder="Male voice id"
+                value={elevenMale}
+                onChange={(e) => setElevenMale(e.target.value)}
+                className="border rounded px-2 py-1 w-full"
+              />
+              <input
+                placeholder="Female voice id"
+                value={elevenFemale}
+                onChange={(e) => setElevenFemale(e.target.value)}
+                className="border rounded px-2 py-1 w-full"
+              />
+            </div>
+          )}
+
+          {ttsProvider === "azure" && (
+            <div>
+              <Label>Azure Voice</Label>
+              <Select
+                value={azureVoiceName}
+                onValueChange={setAzureVoiceName}
+              >
+                <SelectTrigger className="w-60 mt-1">
+                  <SelectValue placeholder="Select Azure Voice" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AZURE_VOICES.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                Curated Azure voices (English, Hindi, Marathi). More can be added later.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div>
+        <Button onClick={save} disabled={saving} className="bg-green-600 text-white self-center">
+          {saving ? "Saving..." : "Save settings"}
+        </Button>
       </div>
     </div>
   );
