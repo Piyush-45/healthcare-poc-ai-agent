@@ -2,7 +2,10 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTTSAdapter } from "@/lib/providers/ttsFactory";
 
-const audioCache = new Map<string, { buffer: Buffer; contentType: string; expiresAt: number }>();
+const audioCache = new Map<
+  string,
+  { buffer: Buffer; contentType: string; expiresAt: number }
+>();
 const CACHE_TTL_MS = 1000 * 60 * 15;
 
 export async function GET(req: NextRequest) {
@@ -20,25 +23,29 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const call = await prisma.call.findUnique({ where: { id: callId }, include: { patient: true } });
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { patient: true },
+    });
     const settings = await prisma.settings.findFirst();
 
     const patientName = call?.patient?.name || "Patient";
     const gender = (settings?.voiceGender as "male" | "female") || "male";
 
-    // Default message
     const text = `Hello ${patientName}, this is the hospital calling to check how you are feeling after discharge. Please speak after the beep.`;
 
     const adapter = await getTTSAdapter();
     const result = await adapter.synthesize(text, { gender });
 
-    // ✅ Log TTS cost
+    // ✅ Cost logging
     try {
-      const provider = (settings?.ttsProvider || process.env.DEFAULT_TTS_PROVIDER || "plivo").toLowerCase();
+      const provider = (
+        settings?.ttsProvider || process.env.DEFAULT_TTS_PROVIDER || "plivo"
+      ).toLowerCase();
 
       if (provider === "azure") {
         const charCount = text.length;
-        const unitCost = 0.000016; // ~$16 per 1M chars
+        const unitCost = 0.000016; // $16 per 1M chars
         const totalCost = charCount * unitCost;
 
         await prisma.costItem.create({
@@ -51,7 +58,11 @@ export async function GET(req: NextRequest) {
             totalCost,
           },
         });
-        console.log(`💰 Azure TTS cost logged: $${totalCost.toFixed(4)} for ${charCount} chars`);
+        console.log(
+          `💰 Azure TTS cost logged: $${totalCost.toFixed(
+            4
+          )} for ${charCount} chars`
+        );
       }
 
       if (provider === "elevenlabs") {
@@ -69,7 +80,33 @@ export async function GET(req: NextRequest) {
             totalCost,
           },
         });
-        console.log(`💰 ElevenLabs TTS cost logged: $${totalCost.toFixed(4)} for ${charCount} chars`);
+        console.log(
+          `💰 ElevenLabs TTS cost logged: $${totalCost.toFixed(
+            4
+          )} for ${charCount} chars`
+        );
+      }
+
+      if (provider === "google") {
+        const charCount = text.length;
+        const unitCost = 0.000016; // $16 / 1M chars (same as Azure)
+        const totalCost = charCount * unitCost;
+
+        await prisma.costItem.create({
+          data: {
+            callId,
+            category: "tts",
+            provider: "google",
+            units: charCount,
+            unitCost,
+            totalCost,
+          },
+        });
+        console.log(
+          `💰 Google TTS cost logged: $${totalCost.toFixed(
+            4
+          )} for ${charCount} chars`
+        );
       }
 
       // Plivo <Speak> = free, skip cost logging
