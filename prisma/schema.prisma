@@ -63,6 +63,7 @@ model Settings {
   sttProvider      String   @default("deepgram")// deepgram | whisper | azure | google
   ttsProvider      String   @default("plivo")   // plivo | elevenlabs | azure | google
   eleven_male_voice String?  // optional: store provider-specific voice IDs
+  azureVoiceName   String?
   eleven_female_voice String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

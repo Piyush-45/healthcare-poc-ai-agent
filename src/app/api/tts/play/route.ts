@@ -1,55 +1,78 @@
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getTTSAdapter } from '@/lib/providers/ttsFactory';
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getTTSAdapter } from "@/lib/providers/ttsFactory";
 
-// simple in-memory cache: Map<key, { buffer, contentType, expiry }>
 const audioCache = new Map<string, { buffer: Buffer; contentType: string; expiresAt: number }>();
-const CACHE_TTL_MS = 1000 * 60 * 15; // 15 minutes
+const CACHE_TTL_MS = 1000 * 60 * 15;
+
+// Localized messages
+const MESSAGES: Record<string, { male: string; female: string }> = {
+  hi: {
+    male: "नमस्ते, अस्पताल की ओर से आपका हालचाल जानने के लिए कॉल किया गया है। कृपया बीप के बाद अपनी स्थिति बताएं।",
+    female: "नमस्ते, अस्पताल की ओर से आपका हालचाल जानने के लिए कॉल किया गया है। बीप के बाद अपनी बात बताएं।",
+  },
+  mr: {
+    male: "नमस्कार, रुग्णालयाच्या वतीने आपली प्रकृती कशी आहे हे विचारण्यासाठी कॉल केला आहे. कृपया बीप नंतर बोला.",
+    female: "नमस्कार, रुग्णालयाच्या वतीने आपली प्रकृती कशी आहे हे विचारण्यासाठी कॉल केला आहे. बीप नंतर बोला.",
+  },
+  en: {
+    male: "Hello, this is the hospital calling to check how you are feeling after discharge. Please speak after the beep.",
+    female: "Hello, this is the hospital calling to check how you are feeling after discharge. Speak after the beep.",
+  },
+};
+
+// Detect language based on Azure voice name prefix
+function detectLangFromVoice(voiceName?: string): "hi" | "mr" | "en" {
+  if (!voiceName) return "en";
+  if (voiceName.startsWith("hi-")) return "hi"; // Hindi voices
+  if (voiceName.startsWith("mr-")) return "mr"; // Marathi voices
+  return "en";
+}
 
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const callId = url.searchParams.get('callId') || '';
-    if (!callId) return new Response('callId required', { status: 400 });
+    const callId = url.searchParams.get("callId");
+    if (!callId) return new Response("callId required", { status: 400 });
 
-    // If cached, return
-    const cacheKey = `call:${callId}`;
+    const cacheKey = `tts:${callId}`;
     const cached = audioCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return new Response(cached.buffer, { status: 200, headers: { 'Content-Type': cached.contentType, 'Cache-Control': 'public, max-age=300' }});
+      return new Response(new Uint8Array(cached.buffer), {
+        status: 200,
+        headers: { "Content-Type": cached.contentType },
+      });
     }
 
-    // Load call + settings to generate TTS content
-    const call = await prisma.call.findUnique({ where: { id: callId }, include: { patient: true } });
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { patient: true },
+    });
     const settings = await prisma.settings.findFirst();
 
-    if (!call) return new Response('call not found', { status: 404 });
+    const gender = (settings?.voiceGender as "male" | "female") || "male";
+    const voiceName = settings?.azureVoiceName;
+    const lang = detectLangFromVoice(voiceName);
 
-    // Build the TTS text — replace with your template or LLM in future
-    const patientName = call.patient?.name || 'Patient';
-    const ttsText = `Hello ${patientName}, this is the hospital calling to check how you are feeling after discharge. Please say how you are feeling after the beep. Press # when finished.`;
+    // Pick localized text
+    const text = MESSAGES[lang][gender];
+    console.log(`[TTS.play] lang=${lang}, gender=${gender}, voice=${voiceName}, text="${text}"`);
 
-    // pick provider from settings
-    const ttsProvider = settings?.ttsProvider || process.env.DEFAULT_TTS_PROVIDER || 'elevenlabs';
-    const gender = (settings?.voiceGender as 'male' | 'female') || 'male';
+    const adapter = await getTTSAdapter();
+    const result = await adapter.synthesize(text, { gender });
 
-    const adapter = getTTSAdapter(ttsProvider);
-    const voiceId = settings?.eleven_male_voice && settings?.eleven_female_voice ? (gender === 'female' ? settings.eleven_female_voice : settings.eleven_male_voice) : undefined;
-
-    const result = await adapter.synthesize(ttsText, { gender, voiceId });
-
-    // cache and return
-    audioCache.set(cacheKey, { buffer: result.audioBuffer, contentType: result.contentType, expiresAt: Date.now() + CACHE_TTL_MS });
-
-    return new Response(result.audioBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': result.contentType,
-        'Cache-Control': 'public, max-age=300'
-      }
+    audioCache.set(cacheKey, {
+      buffer: result.audioBuffer,
+      contentType: result.contentType,
+      expiresAt: Date.now() + CACHE_TTL_MS,
     });
-  } catch (err: any) {
-    console.error('TTS play error', err);
-    return new Response('TTS error', { status: 500 });
+
+    return new Response(new Uint8Array(result.audioBuffer), {
+      status: 200,
+      headers: { "Content-Type": result.contentType },
+    });
+  } catch (err) {
+    console.error("TTS play error:", err);
+    return new Response("TTS error", { status: 500 });
   }
 }

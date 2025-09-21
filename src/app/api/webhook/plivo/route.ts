@@ -12,10 +12,9 @@ export async function POST(req: NextRequest) {
     console.log("📞 Parsed Plivo webhook payload:", payload);
 
     const callUuid = payload.CallUUID || payload.request_uuid;
-    const callStatus = payload.CallStatus || payload.Event;
     const recordUrl = payload.RecordingUrl || payload.RecordUrl;
+    const callStatus = payload.CallStatus || payload.Event;
 
-    // Fallback: callId from query string
     const url = new URL(req.url);
     const callIdQuery = url.searchParams.get("callId");
 
@@ -27,23 +26,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Update DB with status + recording
-    if (callStatus?.toLowerCase() === "completed" || callStatus?.toLowerCase() === "hangup") {
+    // ✅ Save recording as soon as we have it
+    if (recordUrl) {
+      console.log(`🎤 Recording received: ${recordUrl}`);
       await prisma.call.update({
         where: { id: targetCallId },
         data: {
-          status: "completed",
-          endedAt: new Date(),
-          recordingUrl: recordUrl || undefined,
+          recordingUrl: recordUrl,
+          status: callStatus?.toLowerCase() === "completed" ? "completed" : "in-progress",
         },
       });
 
-      if (recordUrl) {
-        console.log("🎤 Recording available:", recordUrl);
-        await startSttAndSaveTranscript(targetCallId, recordUrl);
-      } else {
-        console.warn("⚠️ No RecordUrl in webhook payload");
-      }
+      // Kick off STT right away
+      await startSttAndSaveTranscript(targetCallId, recordUrl);
+    } else {
+      console.warn("⚠️ No RecordUrl in webhook payload");
+    }
+
+    // ✅ Also mark call completed at the end
+    if (callStatus?.toLowerCase() === "completed") {
+      await prisma.call.update({
+        where: { id: targetCallId },
+        data: { status: "completed", endedAt: new Date() },
+      });
     }
 
     return NextResponse.json({ ok: true });
