@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Info } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -19,21 +20,28 @@ import {
 } from "@/components/ui/dialog";
 import Spinner from "@/components/Spinner";
 
-type Transcript = { text: string };
-type CostItem = { totalCost: number; category: string };
+type CostItem = {
+  totalCost: number;
+  category: string;
+  provider: string;
+  units: number;   // 👈 add this
+};
 
 type Call = {
   id: string;
   patient: { name: string };
   createdAt: string;
   recordingUrl: string | null;
-  transcripts: Transcript[];
+  transcript: string | null;
+  transcriptStatus: string; // "pending" | "completed" | "failed"
   costItems: CostItem[];
+  totalCost: number;
 };
 
 export default function CallsPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     fetchCalls();
   }, []);
@@ -44,6 +52,7 @@ export default function CallsPage() {
     setCalls(await r.json());
     setLoading(false);
   }
+
   if (loading) {
     return (
       <div className="p-6">
@@ -52,6 +61,7 @@ export default function CallsPage() {
       </div>
     );
   }
+
   return (
     <div className="p-6 space-y-6">
       <Card>
@@ -84,7 +94,15 @@ export default function CallsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {c.transcripts.length > 0 ? (
+                    {c.transcriptStatus === "pending" && (
+                      <em className="text-yellow-600">
+                        Processing transcript…
+                      </em>
+                    )}
+                    {c.transcriptStatus === "failed" && (
+                      <em className="text-red-600">Transcript failed</em>
+                    )}
+                    {c.transcriptStatus === "completed" && c.transcript && (
                       <Dialog>
                         <DialogTrigger asChild>
                           <Button variant="secondary" size="sm">
@@ -96,19 +114,60 @@ export default function CallsPage() {
                             <DialogTitle>Transcript</DialogTitle>
                           </DialogHeader>
                           <div className="mt-2 whitespace-pre-wrap text-sm max-h-[60vh] overflow-y-auto">
-                            {c.transcripts[0].text}
+                            {c.transcript}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                    {c.transcriptStatus === "completed" && !c.transcript && (
+                      <em>No transcript</em>
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    {c.totalCost > 0 ? (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="flex items-center gap-1"
+                          >
+                            ${c.totalCost.toFixed(4)}
+                            <Info className="w-3 h-3 text-slate-500" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md bg-white">
+                          <DialogHeader>
+                            <DialogTitle>Cost Breakdown</DialogTitle>
+                          </DialogHeader>
+                          <div className="mt-2 space-y-2 text-sm">
+                            {c.costItems.map((ci, idx) => (
+                              <div
+                                key={idx}
+                                className="flex justify-between border-b border-slate-200 pb-1"
+                              >
+                                <span className="capitalize">
+                                  {ci.category.toUpperCase()} ({ci.provider})
+                                  <span className="ml-2 text-xs text-slate-500">
+                                    {ci.category === "stt"
+                                      ? `${(ci.units * 60).toFixed(1)}s audio`
+                                      : `${ci.units} chars`}
+                                  </span>
+                                </span>
+                                <span>${ci.totalCost.toFixed(4)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between font-semibold pt-2">
+                              <span>Total</span>
+                              <span>${c.totalCost.toFixed(4)}</span>
+                            </div>
                           </div>
                         </DialogContent>
                       </Dialog>
                     ) : (
-                      <em>No transcript</em>
+                      <span>$0.0000</span>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    $
-                    {c.costItems
-                      .reduce((sum, item) => sum + (item.totalCost || 0), 0)
-                      .toFixed(4)}
                   </TableCell>
                 </TableRow>
               ))}

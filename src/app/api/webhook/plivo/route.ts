@@ -34,10 +34,10 @@ export async function POST(req: NextRequest) {
         data: {
           recordingUrl: recordUrl,
           status: callStatus?.toLowerCase() === "completed" ? "completed" : "in-progress",
+          transcriptStatus: "pending", // 👈 set as soon as recording is available
         },
       });
 
-      // Kick off STT right away
       await startSttAndSaveTranscript(targetCallId, recordUrl);
     } else {
       console.warn("⚠️ No RecordUrl in webhook payload");

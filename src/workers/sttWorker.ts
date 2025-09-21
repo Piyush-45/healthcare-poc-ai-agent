@@ -1,73 +1,112 @@
-import { prisma } from "../lib/prisma";
-import { createClient } from "@deepgram/sdk";
-import axios from "axios";
+// workers/sttWorker.ts
+import { prisma } from "@/lib/prisma";
+import fetch from "node-fetch"; // ensure installed: npm install node-fetch
 
-export async function startSttAndSaveTranscript(callId: string, recordingUrl: string) {
-  console.log("STT job starting for", callId, recordingUrl);
+/**
+ * Detect STT language from Azure voice or fallback to English
+ */
+function detectLangForSTT(voiceName?: string): string {
+  if (!voiceName) return "en";
+  if (voiceName.startsWith("hi-")) return "hi"; // Hindi
+  if (voiceName.startsWith("mr-")) return "mr"; // Marathi
+  return "en"; // default English
+}
 
+/**
+ * Call Deepgram API for STT
+ */
+async function runDeepgram(audioUrl: string, language: string): Promise<{ text: string; duration: number }> {
+  if (!process.env.DEEPGRAM_API_KEY) {
+    throw new Error("DEEPGRAM_API_KEY not set");
+  }
+
+  console.log(`🎧 Sending audio to Deepgram [lang=${language}]:`, audioUrl);
+
+  const resp = await fetch("https://api.deepgram.com/v1/listen", {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: audioUrl, language }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Deepgram API failed: ${resp.status} ${errText}`);
+  }
+
+  const data: any = await resp.json();
+  console.log("📄 Deepgram raw response:", JSON.stringify(data, null, 2));
+
+  const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+  const duration = data.metadata?.duration || 0;
+
+  return { text: transcript.trim(), duration };
+}
+
+/**
+ * Start STT and save transcript + cost to DB
+ */
+export async function startSttAndSaveTranscript(callId: string, audioUrl: string) {
   try {
-    if (process.env.STT_PROVIDER === "deepgram" && process.env.DEEPGRAM_API_KEY) {
-      const dgClient = createClient(process.env.DEEPGRAM_API_KEY);
+    console.log(`🚀 STT job starting for callId=${callId}, url=${audioUrl}`);
 
-      // 1. Download the Plivo recording (auth required)
-      const resp = await axios.get(recordingUrl, {
-        auth: {
-          username: process.env.PLIVO_AUTH_ID!,
-          password: process.env.PLIVO_AUTH_TOKEN!,
-        },
-        responseType: "arraybuffer",
+    // Mark transcript as pending
+    await prisma.call.update({
+      where: { id: callId },
+      data: { transcriptStatus: "pending" },
+    });
+
+    // Detect language from settings
+    const settings = await prisma.settings.findFirst();
+    const lang = detectLangForSTT(settings?.azureVoiceName);
+
+    // Run Deepgram
+    const { text, duration } = await runDeepgram(audioUrl, lang);
+
+    if (!text) {
+      console.warn("⚠️ Deepgram returned empty transcript");
+      await prisma.call.update({
+        where: { id: callId },
+        data: { transcriptStatus: "failed" },
       });
-      const audioBuffer = Buffer.from(resp.data);
-
-      // 2. Send audio buffer to Deepgram
-      const response = await dgClient.listen.prerecorded.transcribeFile(
-        audioBuffer,
-        {
-          model: "nova-2",
-          smart_format: true,
-          punctuate: true,
-          detect_language: true,
-        }
-      );
-
-      // 3. Extract transcript + metadata
-      const transcriptText =
-        response.result.results.channels[0].alternatives[0].transcript || "";
-      const language =
-        response.result.results.channels[0].alternatives[0].language || "unknown";
-      const duration =
-        response.result.metadata?.duration || 0;
-
-      // 4. Save transcript
-      await prisma.transcript.create({
-        data: {
-          callId,
-          provider: "deepgram",
-          language,
-          text: transcriptText,
-        },
-      });
-
-      // 5. Save cost (Deepgram Nova-2 ~ $0.0048/minute)
-      const unitCost = 0.0048 / 60; // cost per second
-      const totalCost = duration * unitCost;
-
-      await prisma.costItem.create({
-        data: {
-          callId,
-          category: "stt",
-          provider: "deepgram",
-          units: duration,
-          unitCost,
-          totalCost,
-        },
-      });
-
-      console.log("✅ Deepgram transcript saved:", transcriptText);
-    } else {
-      console.warn("⚠️ Deepgram not configured, skipping STT");
+      return;
     }
-  } catch (err) {
-    console.error("❌ STT error:", err);
+
+    // Save transcript
+    await prisma.call.update({
+      where: { id: callId },
+      data: {
+        transcript: text,
+        transcriptStatus: "completed",
+      },
+    });
+
+    console.log("✅ Deepgram transcript saved:", text);
+
+    // Save cost (Deepgram $0.006 / min for standard model)
+    const costPerMinute = 0.006;
+    const totalCost = (duration / 60) * costPerMinute;
+
+    await prisma.costItem.create({
+      data: {
+        callId,
+        category: "stt",
+        provider: "deepgram",
+        units: duration / 60, // minutes
+        unitCost: costPerMinute,
+        totalCost,
+      },
+    });
+
+    console.log(`💰 STT cost logged: $${totalCost.toFixed(4)} for ${duration.toFixed(2)}s`);
+  } catch (err: any) {
+    console.error("❌ STT worker error:", err);
+
+    await prisma.call.update({
+      where: { id: callId },
+      data: { transcriptStatus: "failed" },
+    });
   }
 }
