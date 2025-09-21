@@ -58,8 +58,12 @@ model CostItem {
 }
 
 model Settings {
-  id         String   @id @default(cuid())
-  voiceGender String  @default("male")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
+  voiceGender      String   @default("male")    // 'male' | 'female'
+  sttProvider      String   @default("deepgram")// deepgram | whisper | azure | google
+  ttsProvider      String   @default("plivo")   // plivo | elevenlabs | azure | google
+  eleven_male_voice String?  // optional: store provider-specific voice IDs
+  eleven_female_voice String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

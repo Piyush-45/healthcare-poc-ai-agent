@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "../../../../lib/prisma";
-import { startSttAndSaveTranscript } from "../../../../workers/sttWorker";
+import { prisma } from "@/lib/prisma";
+import { startSttAndSaveTranscript } from "@/workers/sttWorker";
 
 export async function POST(req: NextRequest) {
   try {
-    // Plivo sends webhooks as x-www-form-urlencoded, not JSON
     const bodyText = await req.text();
+    console.log("📞 Raw Plivo webhook body:", bodyText);
+
     const params = new URLSearchParams(bodyText);
+    const payload = Object.fromEntries(params);
+    console.log("📞 Parsed Plivo webhook payload:", payload);
 
-    const callUuid = params.get("CallUUID") || params.get("request_uuid");
-    const callStatus = params.get("CallStatus") || params.get("Event");
-    const recordUrl = params.get("RecordingUrl") || params.get("RecordUrl");
+    const callUuid = payload.CallUUID || payload.request_uuid;
+    const callStatus = payload.CallStatus || payload.Event;
+    const recordUrl = payload.RecordingUrl || payload.RecordUrl;
 
-    console.log("📞 Plivo webhook payload:", Object.fromEntries(params));
-
-    // If call not found by CallUUID, check ?callId in query string
+    // Fallback: callId from query string
     const url = new URL(req.url);
     const callIdQuery = url.searchParams.get("callId");
 
-    let call = null;
-    if (callUuid) {
-      call = await prisma.call.findFirst({ where: { telephonyCallId: callUuid } });
-    }
+    const call = await prisma.call.findFirst({ where: { telephonyCallId: callUuid } });
     const targetCallId = call?.id ?? callIdQuery;
 
     if (!targetCallId) {
@@ -29,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Update call record
+    // Update DB with status + recording
     if (callStatus?.toLowerCase() === "completed" || callStatus?.toLowerCase() === "hangup") {
       await prisma.call.update({
         where: { id: targetCallId },
@@ -40,9 +38,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Kick off STT worker if recording available
       if (recordUrl) {
+        console.log("🎤 Recording available:", recordUrl);
         await startSttAndSaveTranscript(targetCallId, recordUrl);
+      } else {
+        console.warn("⚠️ No RecordUrl in webhook payload");
       }
     }
 
