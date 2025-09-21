@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String
+  mrn          String?
+  city         String?
+  dischargedAt DateTime?
+  calls        Call[]
+  createdAt    DateTime @default(now())
+}
+
+model Call {
+  id                String      @id @default(cuid())
+  patientId         String
+  patient           Patient     @relation(fields: [patientId], references: [id])
+  telephonyProvider String
+  telephonyCallId   String?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  durationSeconds   Int?
+  recordingUrl      String?
+  status            String
+  createdAt         DateTime     @default(now())
+  transcripts       Transcript[]
+  costItems         CostItem[]
+}
+
+model Transcript {
+  id         String   @id @default(cuid())
+  callId     String
+  call       Call     @relation(fields: [callId], references: [id])
+  provider   String
+  language   String?
+  text       String   @db.Text
+  confidence Float?
+  createdAt  DateTime @default(now())
+}
+
+model CostItem {
+  id        String  @id @default(cuid())
+  callId    String
+  call      Call    @relation(fields: [callId], references: [id])
+  category  String
+  provider  String
+  units     Float
+  unitCost  Float
+  totalCost Float
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id         String   @id @default(cuid())
+  voiceGender String  @default("male")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
