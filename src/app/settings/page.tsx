@@ -104,7 +104,7 @@ export default function SettingsPage() {
               <SelectTrigger className="w-60 mt-1">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white" >
                 <SelectItem value="deepgram">Deepgram</SelectItem>
                 <SelectItem value="whisper">OpenAI Whisper</SelectItem>
                 <SelectItem value="azure">Azure</SelectItem>
@@ -120,7 +120,7 @@ export default function SettingsPage() {
                 <SelectTrigger className="w-60 mt-1">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent  className="bg-white">
                   {GOOGLE_LANGS.map((lang) => (
                     <SelectItem key={lang.value} value={lang.value}>
                       {lang.label}
@@ -144,7 +144,7 @@ export default function SettingsPage() {
               <SelectTrigger className="w-60 mt-1">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent  className="bg-white">
                 <SelectItem value="plivo">Plivo (built-in)</SelectItem>
                 <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
                 <SelectItem value="azure">Azure TTS</SelectItem>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
                 <SelectTrigger className="w-60 mt-1">
                   <SelectValue placeholder="Select Azure Voice" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent  className="bg-white">
                   {AZURE_VOICES.map((v) => (
                     <SelectItem key={v.value} value={v.value}>
                       {v.label}

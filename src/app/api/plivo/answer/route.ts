@@ -2,12 +2,15 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 function playUrl(callId: string) {
-  return `${process.env.PUBLIC_URL}/api/tts/play?callId=${encodeURIComponent(callId)}`;
+  return `${process.env.PUBLIC_URL}/api/tts/play?callId=${encodeURIComponent(
+    callId
+  )}`;
 }
 
 async function generateXml(callId: string) {
   const settings = await prisma.settings.findFirst();
-  const ttsProvider = settings?.ttsProvider || process.env.DEFAULT_TTS_PROVIDER || "elevenlabs";
+  const ttsProvider =
+    settings?.ttsProvider || process.env.DEFAULT_TTS_PROVIDER || "elevenlabs";
 
   if (ttsProvider && ttsProvider !== "plivo") {
     const url = playUrl(callId);
@@ -41,12 +44,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const callId = searchParams.get("callId") || "";
   const xml = await generateXml(callId);
-  return new Response(xml, { status: 200, headers: { "Content-Type": "application/xml" } });
+  return new Response(xml, {
+    status: 200,
+    headers: { "Content-Type": "application/xml" },
+  });
 }
 
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const callId = searchParams.get("callId") || "";
   const xml = await generateXml(callId);
-  return new Response(xml, { status: 200, headers: { "Content-Type": "application/xml" } });
+  return new Response(xml, {
+    status: 200,
+    headers: { "Content-Type": "application/xml" },
+  });
 }

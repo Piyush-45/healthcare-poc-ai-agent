@@ -70,4 +70,5 @@ model Settings {
   eleven_female_voice String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+    googleLanguage     String?
 }
